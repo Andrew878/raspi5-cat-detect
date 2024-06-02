@@ -2,3 +2,4 @@ argparse
 numpy>=1.24.2  # To ensure compatibility with OpenCV on Raspberry Pi.
 protobuf>=3.18.0,<4
 tflite-runtime==2.14.0
+opencv-python-headless

@@ -6,6 +6,7 @@ else
   DATA_DIR="$1"
 fi
 
+
 # Install Python dependencies
 python3 -m venv --system-site-packages env_cat_det
 source env_cat_det/bin/activate
