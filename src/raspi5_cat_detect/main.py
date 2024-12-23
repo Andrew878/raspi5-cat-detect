@@ -1,8 +1,9 @@
 import time
 import os
 from pathlib import Path
-import moondream as md
 from picamera2 import Picamera2
+
+import moondream as md
 from twilio.rest import Client
 from PIL import Image
 from dotenv import load_dotenv
@@ -12,7 +13,7 @@ load_dotenv()
 
 
 class CatDetector:
-    def __init__(self, image_dir: str = "/home/pi/cat_images", model_path: str = "moondream-2b-int8.mf"):
+    def __init__(self, image_dir: str = "./cat_images", model_path: str = "moondream-2b-int8.mf"):
         """Initialize the cat detector with camera, model, and messaging setup"""
         # Initialize Raspberry Pi Camera
         self.picam2 = Picamera2()
@@ -62,8 +63,9 @@ class CatDetector:
         # Then specifically query for cat presence
         answer = self.model.query(
             encoded_image,
-            "Is there a cat in this image? Answer with just 'yes' or 'no'."
+            "Are there books in this image? Answer with just 'yes' or 'no'."
         )["answer"]
+        print(f"Query answer: {answer}")
 
         return answer.lower().strip() == "yes"
 
@@ -95,6 +97,9 @@ class CatDetector:
             try:
                 print("Capturing image...")
                 image_path = self.capture_image()
+                print(f"Attempted to capture image to: {image_path}")
+                print(f"Directory exists? {self.image_dir.exists()}")
+                print(f"File now exists? {image_path.exists()}")
 
                 print("Analyzing image...")
                 if self.detect_cat(image_path):
