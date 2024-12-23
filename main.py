@@ -1,99 +1,123 @@
-from picamera2 import Picamera2
 import time
+import os
+from pathlib import Path
+import moondream as md
+from picamera2 import Picamera2
+from twilio.rest import Client
 from PIL import Image
-import tflite_runtime.interpreter as tflite
-import numpy as np
-from label_map_coco import LABEL_MAP
+from dotenv import load_dotenv
 
-def capture_image():
-    # Create a Picamera2 instance
-    picam2 = Picamera2()
-
-    # Configure the camera settings
-    preview_config = picam2.create_preview_configuration(main={"format": 'XRGB8888', "size": (1920, 1080)})
-    picam2.configure(preview_config)
-
-    # Start the camera
-    picam2.start()
-    print("Camera started. Warming up...")
-    time.sleep(0.5)  # Give the camera some time to warm up
-
-    # Capture an image to a numpy array
-    image = picam2.capture_array()
-    print("Image captured.")
-
-    # Convert the image to a PIL Image object
-    img = Image.fromarray(image)
-    
-    # If the image has an alpha channel, convert it to RGB
-    if img.mode == 'RGBA':
-        img = img.convert('RGB')
-
-    # Save the image to a file
-    img.save('test_image.jpg')
-    print("Image saved as 'test_image.jpg'.")
-
-    # Stop the camera
-    picam2.stop()
-    print("Camera stopped.")
+# Load environment variables
+load_dotenv()
 
 
+class CatDetector:
+    def __init__(self, image_dir: str = "/home/pi/cat_images", model_path: str = "moondream-2b-int8.mf"):
+        """Initialize the cat detector with camera, model, and messaging setup"""
+        # Initialize Raspberry Pi Camera
+        self.picam2 = Picamera2()
+        config = self.picam2.create_still_configuration()
+        self.picam2.configure(config)
 
-def load_interpreter(model_path):
-    interpreter = tflite.Interpreter(model_path=model_path)
-    interpreter.allocate_tensors()
-    return interpreter
+        # Set image directory
+        self.image_dir = Path(image_dir)
+        self.image_dir.mkdir(parents=True, exist_ok=True)
 
-def run_object_detection(image_path, model_path, confidence_threshold=0.5):
-    # Load the image
-    image = Image.open(image_path)
-    
-    # Load TFLite model and allocate tensors
-    interpreter = tflite.Interpreter(model_path=model_path)
-    interpreter.allocate_tensors()
+        # Initialize Moondream model
+        self.model = md.vl(model=model_path)
 
-    # Get model details
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    input_shape = input_details[0]['shape']
+        # Twilio WhatsApp configuration
+        self.twilio_account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+        self.twilio_auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+        self.twilio_from_number = os.getenv('TWILIO_FROM_NUMBER')
+        self.your_number = os.getenv('YOUR_WHATSAPP_NUMBER')
 
-        # Debug: Print output tensor details
-    for output in output_details:
-        print(output['name'], "shape:", output['shape'], "dtype:", output['dtype'])
+        if not all([self.twilio_account_sid, self.twilio_auth_token,
+                    self.twilio_from_number, self.your_number]):
+            raise ValueError("Missing required environment variables for Twilio")
+
+        self.twilio_client = Client(self.twilio_account_sid, self.twilio_auth_token)
+
+    def capture_image(self) -> Path:
+        """Capture an image using Raspberry Pi Camera"""
+        self.picam2.start()
+        time.sleep(2)  # Allow camera to adjust
+
+        image_path = self.image_dir / f'cat_image_{int(time.time())}.jpg'
+        self.picam2.capture_file(str(image_path))
+        self.picam2.stop()
+
+        return image_path
+
+    def detect_cat(self, image_path: Path) -> bool:
+        """Detect if a cat is present in the image using Moondream"""
+        # Load and encode image
+        image = Image.open(image_path)
+        encoded_image = self.model.encode_image(image)
+
+        # First get a general caption to confirm image quality
+        caption = self.model.caption(encoded_image)["caption"]
+        print(f"Image caption: {caption}")
+
+        # Then specifically query for cat presence
+        answer = self.model.query(
+            encoded_image,
+            "Is there a cat in this image? Answer with just 'yes' or 'no'."
+        )["answer"]
+
+        return answer.lower().strip() == "yes"
+
+    def send_whatsapp(self, image_path: Path, caption: str = None) -> bool:
+        """Send image via WhatsApp using Twilio"""
+        try:
+            message_body = 'Cat detected!'
+            if caption:
+                message_body += f'\nImage description: {caption}'
+
+            message = self.twilio_client.messages.create(
+                from_=self.twilio_from_number,
+                body=message_body,
+                to=self.your_number,
+                media_url=[f'file://{image_path.absolute()}']
+            )
+            print(f"WhatsApp message sent successfully! Message ID: {message.sid}")
+            return True
+        except Exception as e:
+            print(f"Error sending WhatsApp message: {e}")
+            return False
+
+    def run(self, interval: int = 60):
+        """Main execution method"""
+        print("Starting Cat Detection Service...")
+        print(f"Using model for inference...")
+
+        while True:
+            try:
+                print("Capturing image...")
+                image_path = self.capture_image()
+
+                print("Analyzing image...")
+                if self.detect_cat(image_path):
+                    print("Cat detected! Sending WhatsApp message...")
+                    self.send_whatsapp(image_path)
+                else:
+                    print("No cat detected in this image.")
+                    image_path.unlink()  # Delete image if no cat detected
+
+                print(f"Waiting {interval} seconds before next capture...")
+                time.sleep(interval)
+
+            except Exception as e:
+                print(f"Error: {e}")
+                time.sleep(interval)
 
 
-    # Prepare input data
-    input_image = image.resize((input_shape[1], input_shape[2]))
-    input_image = np.expand_dims(input_image, axis=0)
-    if input_details[0]['dtype'] == np.float32:
-        input_image = (np.float32(input_image) - 127.5) / 127.5
-
-    # Set the model input
-    interpreter.set_tensor(input_details[0]['index'], input_image)
-
-    # Run inference
-    interpreter.invoke()
-
-    # Retrieve outputs
-    boxes = interpreter.get_tensor(output_details[0]['index'])
-    classes = interpreter.get_tensor(output_details[1]['index'])  # Class labels
-    scores = interpreter.get_tensor(output_details[2]['index'])   # Confidence scores
-
-    # Process outputs
-    print("Detected objects:")
-    for i in range(len(scores)):
-        if scores[0,i] > confidence_threshold:
-            ymin, xmin, ymax, xmax = boxes[0,i]
-            print(f"Class {LABEL_MAP[int(classes[0,i])]}, Confidence: {scores[0,i]:.2f}, Bounding box: ({ymin:.2f}, {xmin:.2f}, {ymax:.2f}, {xmax:.2f})")
-
+def main():
+    # Use environment variable for model path if provided
+    model_path = os.getenv('MOONDREAM_MODEL_PATH', 'moondream-2b-int8.mf')
+    detector = CatDetector(model_path=model_path)
+    detector.run()
 
 
 if __name__ == "__main__":
-    model_path = 'efficientdet_lite0.tflite'
-    interpreter = load_interpreter(model_path)
-
-
-    capture_image()  # Assuming this saves 'test_image.jpg' as per your existing code
-    img = Image.open('test_image.jpg')
-    run_object_detection('test_image.jpg',model_path=model_path, confidence_threshold=.1)
-
+    main()

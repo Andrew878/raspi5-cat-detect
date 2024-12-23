@@ -1,0 +1,58 @@
+[project]
+name = "raspi5-cat-detect"
+version = "0.1.0"
+description = "Cat detection using Raspberry Pi 5 Camera and Moondream"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+dependencies = [
+    "picamera2>=0.3.12",
+    "twilio>=8.12.0",
+    "Pillow>=10.0.0",
+    "moondream==0.0.5",
+    "python-dotenv>=1.0.0",
+]
+requires-python = ">=3.9"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.1.1",
+    "ruff>=0.2.1",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+]
+
+[tool.ruff.isort]
+known-first-party = ["raspi5_cat_detect"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]
+include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --cov=raspi5_cat_detect"
+testpaths = [
+    "tests",
+]
+
+[project.scripts]
+raspi5-cat-detect = "raspi5_cat_detect.detector:main"
