@@ -28,6 +28,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/raspi5_cat_detect"]
+
+
 [tool.ruff]
 line-length = 88
 target-version = "py39"

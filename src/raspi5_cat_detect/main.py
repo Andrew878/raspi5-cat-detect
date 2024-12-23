@@ -114,7 +114,9 @@ class CatDetector:
 
 def main():
     # Use environment variable for model path if provided
-    model_path = os.getenv('MOONDREAM_MODEL_PATH', 'moondream-2b-int8.mf')
+    is_small = os.getenv('MODEL_TYPE') == 'small'
+    model_path = os.getenv('MOONDREAM_MODEL_PATH_SMALL') if is_small else os.getenv('MOONDREAM_MODEL_PATH_LARGE')
+    print(f"Model path is {model_path}")
     detector = CatDetector(model_path=model_path)
     detector.run()
 
