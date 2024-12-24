@@ -170,7 +170,7 @@ class CatDetector:
         # (here, we just use the same local relative path as the object key)
         object_key = str(local_file_path.relative_to(self.base_image_dir))  
         
-        put_url = self.generate_presigned_put_url(object_key, expiration=1800)
+        put_url = self.generate_presigned_put_url(object_key, expiration=3600*24*7)
         if not put_url:
             print("Failed to generate presigned PUT URL.")
             return None
@@ -183,7 +183,7 @@ class CatDetector:
             return None
 
         # Now generate a presigned GET URL so Twilio/Email can fetch this image
-        get_url = self.generate_presigned_get_url(object_key, expiration=1800)
+        get_url = self.generate_presigned_get_url(object_key, expiration=3600*24*7)
         print(f"Presigned GET URL (for Twilio/Email): {get_url}")
         return get_url
 
@@ -237,17 +237,15 @@ class CatDetector:
         if not self.cat_detections:
             # Nothing to send
             return
+        length = len(self.cat_detections)
+        n= 6
 
-        # 1) Decide which entries to include: up to 3, evenly spaced
-        if len(self.cat_detections) <= 3:
+        # 1) Decide which entries to include: up to 6, evenly spaced
+        if length <= n:
             selected = self.cat_detections
         else:
             # pick the earliest, middle, latest
-            selected = [
-                self.cat_detections[0],
-                self.cat_detections[len(self.cat_detections)//2],
-                self.cat_detections[-1]
-            ]
+            selected = [self.cat_detections[round(i * (length - 1) / (n - 1))] for i in range(n)]
 
         # 2) Construct the Twilio/Email message
         cat_sum = sum(d["cat_count"] for d in selected)
@@ -407,11 +405,11 @@ def main():
     # Example usage:
     detector = CatDetector(
         model_path=model_path,
-        message_cooldown_hours=3.0/20  # or any other value you like
+        message_cooldown_hours=1.0  # or any other value you like
     )
 
     # Example: run for 2 iterations (for a quick test)
-    detector.run(interval=60, max_iterations=10)
+    detector.run(interval=60, max_iterations=60*60*3)
 
 if __name__ == "__main__":
     main()
