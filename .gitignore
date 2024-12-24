@@ -1,3 +1,4 @@
 env_cat_det/*
 __pycache__/*
 .venv/*
+cat_images/*
