@@ -78,13 +78,6 @@ class CatDetector:
         self.message_cooldown_hours = message_cooldown_hours
         self.last_message_time = datetime.min  # track last time we sent a message
         self.cat_detections: List[dict] = []
-        # Each entry in `self.cat_detections` is a dict:
-        # {
-        #    "timestamp": datetime,
-        #    "s3_url": str,
-        #    "local_path": Path,
-        #    "cat_count": int
-        # }
 
         # 7. SendGrid configuration
         self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY")  # If None, skip email
@@ -191,7 +184,6 @@ class CatDetector:
         """
         Detect how many cats are in the image using Moondream.
 
-        We'll do a simple approach:
          1) Encode image with self.model.encode_image(...)
          2) Query "How many cats are in this image? Provide a number."
          3) Attempt to parse an integer from the result.
@@ -222,10 +214,10 @@ class CatDetector:
         Sends a WhatsApp message (and Email) if enough time has passed (>= message_cooldown_hours)
         and if we have cat detections queued.
 
-        We send up to 3 images (evenly spaced in time) among the queued cat detections.
+        Send up to 3 images (evenly spaced in time) among the queued cat detections.
         The message says "Cats detected! (N)" where N is sum of the cat counts in those images.
 
-        We send the identical message to BOTH self.your_number and self.second_number (if set).
+        Send the identical message to BOTH self.your_number and self.second_number (if set).
         Then, we also send an email via SendGrid if SENDGRID_API_KEY is defined.
         """
         now = datetime.now()
